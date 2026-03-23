@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="description" content="跨平台实验记录软件，支持药品管理、溶液浓度计算、WebDAV 同步">
+  <meta name="theme-color" content="#0f172a">
+  <title>实验记录本 | Lab Notebook</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧪</text></svg>">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 侧边栏 -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <span class="logo-icon">🧪</span>
+        <span class="logo-text">实验记录本</span>
+      </div>
+      <button class="sidebar-close" id="sidebarClose" aria-label="关闭菜单">✕</button>
+    </div>
+    <nav class="nav">
+      <a href="#projects" class="nav-item active" data-page="projects" id="nav-projects">
+        <span class="nav-icon">📁</span>
+        <span class="nav-label">项目管理</span>
+      </a>
+      <a href="#chemicals" class="nav-item" data-page="chemicals" id="nav-chemicals">
+        <span class="nav-icon">💊</span>
+        <span class="nav-label">药品管理</span>
+      </a>
+      <a href="#settings" class="nav-item" data-page="settings" id="nav-settings">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-label">同步设置</span>
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="sync-status" id="syncStatus">
+        <span class="sync-dot offline"></span>
+        <span class="sync-text">未连接</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- 遮罩层 (手机端) -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+  <!-- 主内容区 -->
+  <main class="main" id="mainContent">
+    <!-- 顶部导航栏 -->
+    <header class="topbar">
+      <button class="menu-btn" id="menuBtn" aria-label="打开菜单">
+        <span></span><span></span><span></span>
+      </button>
+      <h1 class="page-title" id="pageTitle">项目管理</h1>
+      <div class="topbar-actions">
+        <button class="btn btn-sync" id="btnSync" title="同步数据">
+          <span class="sync-icon">🔄</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 页面容器 -->
+    <div class="page-container">
+
+      <!-- ==================== 项目管理页 ==================== -->
+      <section class="page" id="page-projects" data-active="true">
+        <!-- 面包屑 -->
+        <div class="breadcrumb" id="breadcrumb">
+          <span class="bc-current">全部项目</span>
+        </div>
+
+        <!-- 主项目列表 -->
+        <div id="projectListView">
+          <div class="page-header">
+            <h2>项目列表</h2>
+            <button class="btn btn-primary" id="btnNewProject">
+              <span>＋</span> 新建项目
+            </button>
+          </div>
+          <div class="list-container" id="projectList">
+            <div class="empty-state">
+              <div class="empty-icon">📁</div>
+              <p>暂无项目</p>
+              <p class="empty-hint">点击"新建项目"创建研究项目</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 子项目列表 -->
+        <div id="subProjectView" style="display:none">
+          <div class="page-header">
+            <button class="btn btn-ghost" id="btnBackToProjects">← 返回</button>
+            <h2 id="subProjectTitle">子项目</h2>
+            <button class="btn btn-primary" onclick="ProjectModule.openSubModal()">
+              <span>＋</span> 新建子项目
+            </button>
+          </div>
+          <div class="list-container" id="subProjectList"></div>
+        </div>
+
+        <!-- 实验列表（子项目下） -->
+        <div id="expListView" style="display:none">
+          <div class="page-header">
+            <button class="btn btn-ghost" id="btnBackToSubs">← 返回</button>
+            <h2 id="expListTitle">实验列表</h2>
+            <div class="header-actions">
+              <button class="btn btn-outline" id="btnCompareView" onclick="ExperimentModule.showCompareView()">
+                📊 对照表格
+              </button>
+              <button class="btn btn-primary" id="btnNewExp" onclick="ExperimentModule.openEditor()">
+                <span>＋</span> 新建实验
+              </button>
+            </div>
+          </div>
+          <div class="list-container" id="expList"></div>
+        </div>
+      </section>
+
+      <!-- ==================== 实验编辑页 ==================== -->
+      <section class="page" id="page-exp-edit">
+        <div class="page-header">
+          <button class="btn btn-ghost" id="btnBackExp">← 返回</button>
+          <h2 id="expEditTitle">新建实验</h2>
+          <button class="btn btn-primary" id="btnSaveExp">保存</button>
+        </div>
+        <form class="form" id="expForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="expNo">实验编号</label>
+              <input type="text" id="expNo" readonly class="form-input">
+            </div>
+            <div class="form-group">
+              <label for="expDate">日期</label>
+              <input type="date" id="expDate" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="expTime">时间</label>
+              <input type="time" id="expTime" class="form-input" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="expTitle">实验标题</label>
+            <input type="text" id="expTitle" placeholder="输入实验标题" class="form-input" required>
+          </div>
+
+          <!-- 操作块容器 -->
+          <div id="blocksContainer"></div>
+          <div style="text-align:center;margin:16px 0">
+            <button type="button" class="btn btn-outline" id="btnAddBlock">
+              ＋ 添加操作块（溶液配制 + 操作步骤）
+            </button>
+          </div>
+
+          <!-- 实验现象 -->
+          <div class="form-group">
+            <label for="expObservations">实验现象</label>
+            <textarea id="expObservations" rows="4" placeholder="描述观察到的实验现象..." class="form-input"></textarea>
+          </div>
+
+          <!-- 实验结果 -->
+          <div class="form-group">
+            <label for="expResults">实验结果与结论</label>
+            <textarea id="expResults" rows="4" placeholder="记录实验结果和结论..." class="form-input"></textarea>
+            <div style="margin-top: 8px;">
+              <input type="file" id="expImageUpload" multiple accept="image/*" style="display: none;">
+              <button type="button" class="btn btn-sm btn-outline" onclick="document.getElementById('expImageUpload').click()">📎 上传图片</button>
+            </div>
+            <div id="expImagePreviewContainer" class="image-preview-grid"></div>
+          </div>
+        </form>
+      </section>
+
+      <!-- ==================== 对照表格页 ==================== -->
+      <section class="page" id="page-compare">
+        <div class="page-header">
+          <button class="btn btn-ghost" onclick="ProjectModule.showExperiments(ProjectModule.currentSubProjectId)">← 返回</button>
+          <h2>对照实验表格</h2>
+        </div>
+        <div class="compare-table-wrapper" id="compareTableWrapper">
+          <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <p>需要至少2个实验才能进行对照比较</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== 药品管理页 ==================== -->
+      <section class="page" id="page-chemicals">
+        <div class="page-header">
+          <h2>药品列表</h2>
+          <button class="btn btn-primary" id="btnNewChem">
+            <span>＋</span> 添加药品
+          </button>
+        </div>
+        <div class="search-bar">
+          <input type="text" id="chemSearch" placeholder="搜索药品名称、CAS号..." class="search-input">
+        </div>
+        <div class="list-container" id="chemList">
+          <div class="empty-state">
+            <div class="empty-icon">💊</div>
+            <p>暂无药品信息</p>
+            <p class="empty-hint">点击"添加药品"录入药品</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 药品编辑弹窗 -->
+      <div class="modal-overlay" id="chemModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="chemModalTitle">添加药品</h3>
+            <button class="btn btn-ghost modal-close" id="chemModalClose">✕</button>
+          </div>
+          <form class="form" id="chemForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="chemNameZh">中文名称 *</label>
+                <input type="text" id="chemNameZh" placeholder="如：氯化钠" class="form-input" required>
+              </div>
+              <div class="form-group">
+                <label for="chemNameEn">英文名称</label>
+                <input type="text" id="chemNameEn" placeholder="如：Sodium Chloride" class="form-input">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="chemCas">CAS 号</label>
+                <input type="text" id="chemCas" placeholder="如：7647-14-5" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="chemMW">分子量 (g/mol) *</label>
+                <input type="number" id="chemMW" step="0.01" min="0" placeholder="如：58.44" class="form-input" required>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="chemDensity">密度 (g/mL)</label>
+                <input type="number" id="chemDensity" step="0.001" min="0" placeholder="可选" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="chemPurity">纯度 (%)</label>
+                <input type="number" id="chemPurity" step="0.1" min="0" max="100" value="99" class="form-input">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="chemManufacturer">厂家</label>
+                <input type="text" id="chemManufacturer" placeholder="如：国药集团" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="chemBatch">批次号</label>
+                <input type="text" id="chemBatch" placeholder="如：20260301" class="form-input">
+              </div>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" id="chemCancelBtn">取消</button>
+              <button type="submit" class="btn btn-primary" id="chemSaveBtn">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 项目弹窗 -->
+      <div class="modal-overlay" id="projModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="projModalTitle">新建项目</h3>
+            <button class="btn btn-ghost modal-close" id="projModalClose">✕</button>
+          </div>
+          <form class="form" id="projForm">
+            <div class="form-group">
+              <label for="projName">项目名称 *</label>
+              <input type="text" id="projName" placeholder="如：纳米材料合成研究" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="projDesc">项目描述</label>
+              <textarea id="projDesc" rows="3" placeholder="项目简要说明..." class="form-input"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" id="projCancelBtn">取消</button>
+              <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 子项目弹窗 -->
+      <div class="modal-overlay" id="subModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 id="subModalTitle">新建子项目</h3>
+            <button class="btn btn-ghost modal-close" id="subModalClose">✕</button>
+          </div>
+          <form class="form" id="subForm">
+            <div class="form-group">
+              <label for="subName">子项目名称 *</label>
+              <input type="text" id="subName" placeholder="如：ZnO 纳米棒制备" class="form-input" required>
+            </div>
+            <div class="form-group">
+              <label for="subDesc">描述</label>
+              <textarea id="subDesc" rows="3" placeholder="子项目说明..." class="form-input"></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" id="subCancelBtn">取消</button>
+              <button type="submit" class="btn btn-primary">保存</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 复制实验弹窗 -->
+      <div class="modal-overlay" id="copyExpModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h3>复制实验</h3>
+            <button class="btn btn-ghost modal-close" id="copyExpModalClose">✕</button>
+          </div>
+          <form class="form" id="copyExpForm">
+            <div class="form-group">
+              <label for="copyTargetProject">选择目标项目</label>
+              <select id="copyTargetProject" class="form-input" required>
+                <option value="">-- 请选择 --</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="copyTargetSub">选择目标子项目</label>
+              <select id="copyTargetSub" class="form-input" required>
+                <option value="">-- 请选择 --</option>
+              </select>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-ghost" id="copyExpCancelBtn">取消</button>
+              <button type="submit" class="btn btn-primary">确认复制</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ==================== 同步设置页 ==================== -->
+      <section class="page" id="page-settings">
+        <div class="page-header">
+          <h2>同步与备份设置</h2>
+        </div>
+        <div class="settings-card">
+          <div class="card glass">
+            <h3>123云盘 WebDAV 配置</h3>
+            <p class="settings-hint">请在123云盘中开启 WebDAV 服务，获取服务器地址和凭据。</p>
+            <form class="form" id="settingsForm">
+              <div class="form-group">
+                <label for="davUrl">WebDAV 地址</label>
+                <input type="url" id="davUrl" placeholder="https://dav.123pan.com/" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="davUser">用户名</label>
+                <input type="text" id="davUser" placeholder="您的123云盘账号" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="davPass">密码 / 应用密码</label>
+                <input type="password" id="davPass" placeholder="WebDAV 专用密码" class="form-input">
+              </div>
+              <div class="form-group">
+                <label for="davPath">远程目录</label>
+                <input type="text" id="davPath" value="/实验记录/" placeholder="/实验记录/" class="form-input">
+              </div>
+              <div class="form-group">
+                <label class="toggle-label">
+                  <input type="checkbox" id="davAutoSync" class="toggle-input">
+                  <span class="toggle-switch"></span>
+                  <span>自动同步（修改后自动上传）</span>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="btn btn-outline" id="btnTestDav">测试连接</button>
+                <button type="submit" class="btn btn-primary" id="btnSaveSettings">保存设置</button>
+              </div>
+            </form>
+            <div class="sync-log" id="syncLog">
+              <h4>同步日志</h4>
+              <div class="log-entries" id="logEntries"></div>
+            </div>
+          </div>
+          <div class="card glass" style="margin-top: 20px;">
+            <h3>本地数据备份</h3>
+            <p class="settings-hint">导出全部数据进行本地备份，或者导入备份文件恢复数据。</p>
+            <div class="form-actions" style="justify-content: flex-start;">
+              <button type="button" class="btn btn-outline" id="btnExportBackup">⬇️ 导出数据</button>
+              <button type="button" class="btn btn-primary" id="btnImportBackup">⬆️ 导入数据</button>
+              <input type="file" id="importDataInput" accept=".json" style="display: none;">
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Toast 通知 -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/utils.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/webdav.js"></script>
+  <script src="js/chemical.js"></script>
+  <script src="js/project.js"></script>
+  <script src="js/experiment.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
