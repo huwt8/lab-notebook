@@ -209,7 +209,8 @@ const App = {
         
         Utils.toast('导入中，请稍候...', 'info');
         const counts = await DB.importAll(data);
-        Utils.toast(`导入成功！恢复: 项目 ${counts.projects}, 实验 ${counts.experiments}`, 'success');
+        const settingsText = (counts.settings > 0) ? `, 设置 ${counts.settings}` : '';
+        Utils.toast(`导入成功！恢复: 项目 ${counts.projects}, 实验 ${counts.experiments}${settingsText}`, 'success');
         
         setTimeout(() => window.location.reload(), 1500);
       } catch (err) {

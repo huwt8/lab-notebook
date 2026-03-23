@@ -328,13 +328,15 @@ const DB = {
     const projects = await this.getAll(this.STORES.projects);
     const subprojects = await this.getAll(this.STORES.subprojects);
     const experiments = await this.getAll(this.STORES.experiments);
+    const settings = await this.getAll(this.STORES.settings);
     return {
       version: 2,
       exportedAt: Utils.isoNow(),
       chemicals,
       projects,
       subprojects,
-      experiments
+      experiments,
+      settings
     };
   },
 
@@ -344,15 +346,19 @@ const DB = {
   async importAll(jsonData) {
     if (!jsonData) throw new Error('无效的数据格式');
 
-    let imported = { chemicals: 0, projects: 0, subprojects: 0, experiments: 0 };
+    let imported = { chemicals: 0, projects: 0, subprojects: 0, experiments: 0, settings: 0 };
 
-    const mergeStore = async (storeName, items, key) => {
+    const mergeStore = async (storeName, items, keyName, idField = 'id') => {
       if (!items) return;
       for (const item of items) {
-        const existing = await this.get(storeName, item.id);
-        if (!existing || item.updatedAt > existing.updatedAt) {
+        const idValue = item[idField];
+        const existing = await this.get(storeName, idValue);
+        // Compare updatedAt or just overwrite if no updatedAt is present (for older records maybe)
+        const itemDate = item.updatedAt || '';
+        const existDate = existing ? (existing.updatedAt || '') : '';
+        if (!existing || itemDate > existDate) {
           await this.put(storeName, item);
-          imported[key]++;
+          imported[keyName]++;
         }
       }
     };
@@ -361,6 +367,7 @@ const DB = {
     await mergeStore(this.STORES.projects, jsonData.projects, 'projects');
     await mergeStore(this.STORES.subprojects, jsonData.subprojects, 'subprojects');
     await mergeStore(this.STORES.experiments, jsonData.experiments, 'experiments');
+    await mergeStore(this.STORES.settings, jsonData.settings, 'settings', 'key');
 
     return imported;
   }
