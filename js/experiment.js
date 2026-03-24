@@ -176,14 +176,23 @@ const ExperimentModule = {
           ${chemOptions}
         </select>
       </div>
+      <!-- 溶剂列表区 -->
+      <div class="solvents-container" style="border-top: 1px dashed rgba(148, 163, 184, 0.2); margin-top: 16px; padding-top: 12px; margin-bottom: 12px;">
+        <div class="section-header" style="margin-bottom: 8px;">
+          <h5 style="margin:0; font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">💧 溶剂成分</h5>
+          <button type="button" class="btn btn-sm btn-ghost" style="padding:4px 8px; font-size:12px;" onclick="ExperimentModule.addSolvent('${uid}')">＋ 添加溶剂</button>
+        </div>
+        <div class="solvents-list" id="solvents-${uid}"></div>
+      </div>
+
       <div class="form-row">
         <div class="form-group">
           <label>分子量 (g/mol)</label>
           <input type="number" class="form-input sol-mw" readonly value="${data && data.mw ? data.mw : ''}">
         </div>
         <div class="form-group">
-          <label>溶液体积 (mL)</label>
-          <input type="number" class="form-input sol-vol" step="0.01" min="0" placeholder="如：100"
+          <label>溶液总计体积 (mL)</label>
+          <input type="number" class="form-input sol-vol" step="0.01" min="0" placeholder="由溶剂组成或手填"
             value="${data && data.volumeML ? data.volumeML : ''}"
             oninput="ExperimentModule.recalcCard(this)">
         </div>
@@ -215,15 +224,6 @@ const ExperimentModule = {
             value="${data && data.concMolL ? data.concMolL : ''}"
             oninput="ExperimentModule.onConcMolLIn(this)">
         </div>
-      </div>
-      
-      <!-- 溶剂列表区 -->
-      <div class="solvents-container" style="border-top: 1px dashed rgba(148, 163, 184, 0.2); margin-top: 16px; padding-top: 12px;">
-        <div class="section-header" style="margin-bottom: 8px;">
-          <h5 style="margin:0; font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">💧 溶剂成分</h5>
-          <button type="button" class="btn btn-sm btn-ghost" style="padding:4px 8px; font-size:12px;" onclick="ExperimentModule.addSolvent('${uid}')">＋ 添加溶剂</button>
-        </div>
-        <div class="solvents-list" id="solvents-${uid}"></div>
       </div>
     `;
     container.appendChild(card);
@@ -371,16 +371,41 @@ const ExperimentModule = {
         <option value="">-- 请选择溶剂 --</option>
         ${chemOptions}
       </select>
-      <input type="number" class="form-input solvent-vol" step="0.01" min="0" placeholder="体积(mL)" value="${data && data.volumeML ? data.volumeML : ''}" style="flex:1;">
-      <button type="button" class="btn btn-ghost solvent-remove" onclick="ExperimentModule.removeSolvent(this)" title="删除此溶剂">✕</button>
+      <input type="number" class="form-input solvent-vol" step="0.01" min="0" placeholder="体积(mL)" value="${data && data.volumeML ? data.volumeML : ''}" style="flex:1;" oninput="ExperimentModule.calcTotalVolume('${uid}')">
+      <button type="button" class="btn btn-ghost solvent-remove" onclick="ExperimentModule.removeSolvent(this, '${uid}')" title="删除此溶剂">✕</button>
     `;
     list.appendChild(item);
   },
 
-  removeSolvent(btn) {
+  removeSolvent(btn, uid) {
     const item = btn.closest('.solvent-item');
     item.style.animation = 'fadeIn 0.2s ease reverse';
-    setTimeout(() => item.remove(), 200);
+    setTimeout(() => {
+      item.remove();
+      ExperimentModule.calcTotalVolume(uid);
+    }, 200);
+  },
+
+  calcTotalVolume(uid) {
+    const list = document.getElementById(`solvents-${uid}`);
+    if (!list) return;
+    let total = 0;
+    list.querySelectorAll('.solvent-vol').forEach(input => {
+      const v = parseFloat(input.value);
+      if (!isNaN(v) && v > 0) total += v;
+    });
+
+    const card = document.getElementById(`sol-${uid}`);
+    if (!card) return;
+    const volInput = card.querySelector('.sol-vol');
+    if (volInput) {
+      if (total > 0) {
+        volInput.value = this._fmt(total, 5);
+      } else {
+        // 如果没有溶剂或总体积为0，就不强制覆盖，可能用户想单独写个总体积
+      }
+      this.recalcCard(volInput);
+    }
   },
 
   /* ============ 操作步骤（块内） ============ */
