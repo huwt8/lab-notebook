@@ -356,7 +356,7 @@ const DB = {
         // Compare updatedAt or just overwrite if no updatedAt is present (for older records maybe)
         const itemDate = item.updatedAt || '';
         const existDate = existing ? (existing.updatedAt || '') : '';
-        if (!existing || itemDate > existDate) {
+        if (!existing || itemDate >= existDate) {
           await this.put(storeName, item);
           imported[keyName]++;
         }

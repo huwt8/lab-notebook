@@ -662,6 +662,26 @@ select.form-input {
   margin-top: 12px;
 }
 
+/* 溶剂列表项 */
+.solvent-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  animation: slideIn 0.2s ease;
+}
+.solvent-item .form-input {
+  min-width: 0;
+}
+.solvent-remove {
+  color: var(--danger);
+  font-size: 1.1rem;
+  padding: 4px 8px;
+}
+.solvent-remove:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+
 .solution-header {
   display: flex;
   align-items: center;

@@ -165,10 +165,14 @@ const ExperimentModule = {
         <span class="solution-number">溶液 #${sIdx}</span>
         <button type="button" class="solution-remove" onclick="this.closest('.solution-card').remove()">✕</button>
       </div>
+      <div class="form-group" style="margin-bottom: 12px;">
+        <label>溶液名称/用途</label>
+        <input type="text" class="form-input sol-name" placeholder="例如：0.1M NaCl 水溶液、清洗液等" value="${data && data.name ? this._esc(data.name) : ''}">
+      </div>
       <div class="form-group">
-        <label>选择药品</label>
+        <label>溶质 (选择主药品)</label>
         <select class="form-input sol-chemical" onchange="ExperimentModule.onChemSelect(this)">
-          <option value="">-- 请选择药品 --</option>
+          <option value="">-- 请选择溶质 --</option>
           ${chemOptions}
         </select>
       </div>
@@ -212,8 +216,24 @@ const ExperimentModule = {
             oninput="ExperimentModule.onConcMolLIn(this)">
         </div>
       </div>
+      
+      <!-- 溶剂列表区 -->
+      <div class="solvents-container" style="border-top: 1px dashed rgba(148, 163, 184, 0.2); margin-top: 16px; padding-top: 12px;">
+        <div class="section-header" style="margin-bottom: 8px;">
+          <h5 style="margin:0; font-size:13px; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px;">💧 溶剂成分</h5>
+          <button type="button" class="btn btn-sm btn-ghost" style="padding:4px 8px; font-size:12px;" onclick="ExperimentModule.addSolvent('${uid}')">＋ 添加溶剂</button>
+        </div>
+        <div class="solvents-list" id="solvents-${uid}"></div>
+      </div>
     `;
     container.appendChild(card);
+
+    // 恢复溶剂数据
+    if (data && data.solvents && data.solvents.length > 0) {
+      for (const solv of data.solvents) {
+        this.addSolvent(uid, solv);
+      }
+    }
 
     // 自动填充分子量
     if (data && data.chemicalId) {
@@ -333,6 +353,36 @@ const ExperimentModule = {
     }
   },
 
+  /* ============ 多溶剂管理 ============ */
+  addSolvent(uid, data = null) {
+    const list = document.getElementById(`solvents-${uid}`);
+    if (!list) return;
+
+    const chemOptions = this.chemicalsCache.map(c =>
+      `<option value="${c.id}" ${data && data.chemicalId === c.id ? 'selected' : ''}>
+        ${this._esc(c.nameZh)}${c.nameEn ? ' (' + this._esc(c.nameEn) + ')' : ''}
+      </option>`
+    ).join('');
+
+    const item = document.createElement('div');
+    item.className = 'solvent-item';
+    item.innerHTML = `
+      <select class="form-input solvent-chemical" style="flex:2;">
+        <option value="">-- 请选择溶剂 --</option>
+        ${chemOptions}
+      </select>
+      <input type="number" class="form-input solvent-vol" step="0.01" min="0" placeholder="体积(mL)" value="${data && data.volumeML ? data.volumeML : ''}" style="flex:1;">
+      <button type="button" class="btn btn-ghost solvent-remove" onclick="ExperimentModule.removeSolvent(this)" title="删除此溶剂">✕</button>
+    `;
+    list.appendChild(item);
+  },
+
+  removeSolvent(btn) {
+    const item = btn.closest('.solvent-item');
+    item.style.animation = 'fadeIn 0.2s ease reverse';
+    setTimeout(() => item.remove(), 200);
+  },
+
   /* ============ 操作步骤（块内） ============ */
 
   addStep(bIdx, content = '') {
@@ -370,6 +420,9 @@ const ExperimentModule = {
     document.querySelectorAll('.op-block').forEach(blockEl => {
       const solutions = [];
       blockEl.querySelectorAll('.solution-card').forEach(card => {
+        const nameInput = card.querySelector('.sol-name');
+        const name = nameInput ? nameInput.value.trim() : '';
+
         const sel = card.querySelector('.sol-chemical');
         const chemicalId = sel ? sel.value : '';
         const mw = parseFloat(card.querySelector('.sol-mw').value) || 0;
@@ -378,7 +431,17 @@ const ExperimentModule = {
         const volumeML = parseFloat(card.querySelector('.sol-vol').value) || 0;
         const concGL = parseFloat(card.querySelector('.sol-conc-gl').value) || 0;
         const concMolL = parseFloat(card.querySelector('.sol-conc-mol').value) || 0;
-        solutions.push({ chemicalId, mw, massG, molesMol, volumeML, concGL, concMolL });
+        
+        const solvents = [];
+        card.querySelectorAll('.solvent-item').forEach(solvEl => {
+          const sSel = solvEl.querySelector('.solvent-chemical');
+          const sVol = parseFloat(solvEl.querySelector('.solvent-vol').value) || 0;
+          if (sSel && sSel.value) {
+            solvents.push({ chemicalId: sSel.value, volumeML: sVol });
+          }
+        });
+
+        solutions.push({ name, chemicalId, mw, massG, molesMol, volumeML, concGL, concMolL, solvents });
       });
 
       const steps = [];
@@ -540,12 +603,31 @@ const ExperimentModule = {
 
       for (let si = 0; si < maxSols; si++) {
         rows.push({
-          label: `溶液${si + 1} - 药品`,
+          label: `溶液${si + 1} - 名称`,
           values: experiments.map(e => {
             const sol = ((e.blocks || [])[bi]?.solutions || [])[si];
-            if (!sol) return '—';
+            return sol && sol.name ? sol.name : '—';
+          })
+        });
+        rows.push({
+          label: `溶液${si + 1} - 溶质`,
+          values: experiments.map(e => {
+            const sol = ((e.blocks || [])[bi]?.solutions || [])[si];
+            if (!sol || !sol.chemicalId) return '—';
             const c = chemMap[sol.chemicalId];
             return c ? c.nameZh : '—';
+          })
+        });
+        rows.push({
+          label: `溶液${si + 1} - 溶剂配方`,
+          values: experiments.map(e => {
+            const sol = ((e.blocks || [])[bi]?.solutions || [])[si];
+            if (!sol || !sol.solvents || sol.solvents.length === 0) return '—';
+            return sol.solvents.map(s => {
+              const c = chemMap[s.chemicalId];
+              const cname = c ? c.nameZh : '未知';
+              return s.volumeML ? `${cname} ${s.volumeML}mL` : cname;
+            }).join(' + ');
           })
         });
         rows.push({
